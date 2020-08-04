@@ -1,0 +1,213 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+
+read_qTower <- function( file_path ) {
+    
+    df_raw <- read_csv(file_path,
+                       col_names = c(0:500) %>% as.character()) %>% # read in 500 columns; this should exceed any actual run, and fill in columsn to right as NAs
+        select_if(~sum(!is.na(.)) > 0) #%>% # remove all columns which are all NAs
+    
+    
+    df <- df_raw %>%
+        drop_na( tail(names(.), 1) %>% var() ) %>% # drop the header, which is empty in the tailing cols
+        mutate( channel = make_channel_vec(.)) %>% # add channel as a column
+        filter(!`0` %in% .$channel) %>%
+        rename(well = `0`) %>%
+        mutate_at(vars(-well, -channel), as.numeric) %>%
+        pivot_longer(-c("well", "channel"), names_to = "Temperature", values_to = "value") %>%
+        mutate_at(vars(well, channel), as.character) %>%
+        mutate_at(vars(Temperature, value), as.numeric) %>%
+        mutate(channel_f = factor(.$channel, levels = c("FAM", "JOE", "TAMRA", "ROX", "Cy5", "Cy5.5", "SyproOrange")))
+}
+
+# new daughter layout function
+df_to_layout <- function(df, layout_type) {
+    df_m <-   set_names( df ,  c("type","row",as.numeric( df [1,-c(1,2)]))) %>%
+        . [ -1 , -1] %>%
+        reshape2::melt( . ,id.vars = "row") %>%
+        mutate( . , well = as_vector(map2( . $row,  . $variable, paste0)) ) %>%
+        set_names( . , c("row", "column", layout_type, "well"))
+    df_m
+}
+
+make_layout <- function( filename ) { # from path to raw layout to a final fomatted layout file
+    # read the layout file, and split each layout into an individual
+    layout_list <- data.table::fread( filename, header = TRUE) %>%
+        as_tibble() %>%
+        split( . ,  . $Type)
+    
+    # put into a merge-able form
+    layout <- df_to_layout(layout_list[[1]], names(layout_list)[[1]])[c(1,2,4)] # initialize the list
+    for (i in c(1:length(layout_list))) {
+        layout <- layout %>%
+            mutate("var" =  as_vector(df_to_layout(layout_list[[i]], layout_type = names(layout_list)[[i]])[3] )) %>% # append the column of interest
+            set_names(c(names(layout), names(layout_list)[[i]])) # rename based on the column of interest
+    }
+    layout <- layout %>%
+        unite("condition", c(4:ncol(.)), remove = FALSE) %>% # create a unique column, used to define groups after averaging
+        mutate_if(is.factor, as.character)
+    
+    layout
+}
+
+make_well_names <- function(row_style, num_style) {
+  if (row_style == "rows") { rows <-  letters[1:16] } else {rows <- LETTERS[1:16] }
+  if (num_style == "01") { cols <- c(c("01", "02", "03", "04", "05", "06", "07", "08", "09"), c(10:24)) } else {cols <- c(1:24) }
+  
+  int <-  list(row = rows,
+               col =cols) %>%
+    cross() %>% # general all possible combos of rows and columns
+    map(lift(paste0)) %>% # pate them together
+    
+    as_vector() %>%
+    as_tibble()  %>%
+    mutate(nchar = lapply(.$value, nchar) %>% as_vector(),
+           char =  str_extract_all(.$value, "[A-Z; a-z]", simplify = TRUE) 
+           %>% str_to_upper(locale = "en") 
+           %>% as_vector()) 
+  
+  
+  if (num_style == "01") {
+    ordered <- int %>%
+      dplyr::arrange(value) %>%
+      .[[1]]
+  } else {
+    ordered <- int %>%
+      dplyr::arrange(char) %>%
+      .[[1]]
+  }
+  ordered
+}
+
+alpha_to_num <- function(alpha) {
+  lets <- LETTERS[1:26]
+  match(alpha, lets)
+} 
+
+set_dye_num <- function(row_nums) {
+  floor(row_nums/4 - 0.1) + 1
+}
+
+convert_numerics <- function( vec ) {
+    
+    if(all(varhandle::check.numeric(vec))){
+        # convert the vector to numeric
+        vec <- as.numeric(vec)
+    }
+    vec
+}
+
+df_to_layout_maker <- function(df_layout, col_name, set_custom_name = FALSE, custom_name = "var_name") {
+                          name_of_col <- col_name # set the name of the column
+                          if (set_custom_name == TRUE) {
+                            name_of_col <- custom_name
+                          }
+                          
+                              df_dye_raw <- df_layout %>%
+                                      mutate(Type = rep(name_of_col, times = nrow(.))) %>%
+                                      select(Type, row, col, !! sym(col_name)) %>%
+                                      pivot_wider(names_from = col, values_from = !! sym(col_name))
+                            
+                            df_dye_b <- as_tibble(t(df_dye_raw), rownames = "row_names")
+                            
+                            df_dye_c <-  as_tibble(t(df_dye_b )) %>%
+                                          set_names(c("Type", names(.)[-1])) %>%
+                                          mutate(Type = rep(.[4,1], times = nrow(.)) %>% as_vector())
+                        }
+
+# test_maker <- df_to_layout_maker(test_func, "conc", FALSE, "whatever")
+# test_maker
+
+df_to_layout_file <- function(df_layout_list, var_names = c(dye, conc)) {
+  df_list <- list()
+  layout_list <- map(var_names, df_to_layout_maker, df_layout_list)
+  
+}
+
+make_layout_tibble <- function(df_valid, 
+                               layout, 
+                               final_vol = 500, 
+                               protein_name, 
+                               validate_all = TRUE,
+                               fold_dil = 2) {
+  # create the well table which is used to make the layouts
+  well_table <- make_well_names("ROWS", "1") %>%
+                 tibble(well = .) %>%
+                 mutate(well_f = factor(well, levels = well),
+                       row = str_extract_all(well, "[A-Z; a-z]", simplify = TRUE) %>% as.character,
+                       col = parse_number(well)) %>%
+                mutate(row_num = alpha_to_num(row)) %>%
+                mutate(block_num = set_dye_num(row_num)) %>%
+                mutate(conc_num = 1/fold_dil^(row_num - block_num)) %>%
+                group_by(col, block_num)
+    
+  if (validate_all == TRUE) {
+      dyes_test_df <- df_valid %>%
+        filter(assignment != "none")
+  } else {
+    dyes_test_df <- df_valid %>%
+        filter(assignment == "validate")
+  }
+  
+dyes_test <- dyes_test_df %>%
+             select(dye) %>%
+             add_row(dye = "SYPRO", .before = 1) %>%
+             distinct(dye) %>%
+             mutate(dye_num = c(1:nrow(.))) # add a validation #
+
+df <-  well_table %>%
+        nest() %>%
+        ungroup() %>%
+        mutate(dye_num = c(1:nrow(.))) %>%
+        right_join(dyes_test, by = "dye_num") %>%
+        unnest(cols = c(data)) %>%
+
+        mutate(volume = final_vol,
+               protein = protein_name) %>%
+        left_join(layout %>% select(dye, conc), by = "dye")   %>%
+    mutate_all(convert_numerics) %>%
+    mutate(conc = conc*conc_num)%>%
+          right_join(well_table) %>%
+        replace_na(list(dye = "Empty", conc = "Empty", volume = "Empty", protein = "Empty")) %>%
+         select(row, col, dye, conc, volume, protein) 
+  
+}
+
+```
+
+```{r}
+protein_layout <- readRDS("layout_821.rds")
+df_valid <- read_csv("sample_validation_hits.csv")
+```
+
+```{r}
+validation_layout_test <- make_layout_tibble(df_valid, protein_layout, 250, "two", fold_dil = 2) %>%
+      lapply(list("dye","conc", "volume", "protein"), df_to_layout_maker, df_layout = .) %>%
+                      bind_rows() %>%
+                      mutate_at("Type", gsub, pattern = "dye", replacement = "compound") %>%
+                      mutate_at("Type", gsub, pattern = "conc", replacement = "concentration")
+
+
+validation_layout_test
+```
+
+
+
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

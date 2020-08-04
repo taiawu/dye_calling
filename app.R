@@ -4,54 +4,6 @@ library(icesTAF) # contains mkdir
 library(tidyverse)
 library(shiny)
 
-# ui <- basicPage(
-#     plotOutput("plot1",
-#                click = "plot_click",
-#                dblclick = "plot_dblclick",
-#                brush = "plot_brush"
-#     ),
-#     verbatimTextOutput("data"),
-#     tableOutput("data_table")
-# )
-# 
-# server <- function(input, output) {
-#     values <- reactiveValues()
-#     #values$df_all <- mtcars
-# 
-#     output$plot1 <- renderPlot({
-#         mtcars %>%
-#             ggplot(aes(x = wt, y = mpg)) +
-#             geom_point()+
-#             facet_wrap(~cyl)
-#     })
-# 
-# 
-#   values$new_vals <- tibble(dye = mtcars$cyl, assignment = rep('none', times = length(mtcars$cyl))) %>% 
-#                           distinct(dye, .keep_all = TRUE)
-# 
-#     observeEvent({input$plot_dblclick$panelvar1}, {
-#         values$new_vals <- values$new_vals %>%
-#                             mutate( assignment = replace(assignment, dye == input$plot_dblclick$panelvar1, "hit")) 
-#         })
-# 
-#         observeEvent({input$plot_click$panelvar1}, {
-#           values$new_vals <- values$new_vals %>%
-#             mutate(assignment = replace(assignment, dye == input$plot_click$panelvar1, "sensitive")) %>%
-#             mutate( assignment = replace(assignment, dye == input$plot_brush$panelvar1, "none")) 
-#             })
-# 
-#         observeEvent(input$plot_brush$panelvar1, {
-#           values$new_vals <- values$new_vals %>%
-#             mutate( assignment = replace(assignment, dye == input$plot_brush$panelvar1, "none")) 
-#                })
-# 
-#        output$data_table <-  renderTable({  values$new_vals  })
-# 
-# }
-# 
-# shinyApp(ui, server)
-# 
-
 facet_no_y_theme <- theme( # for the first hit-calling plot, the most austere
     text = element_text(size = 4),
     axis.title = element_blank(), # don't label the axes

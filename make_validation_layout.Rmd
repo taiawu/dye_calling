@@ -138,7 +138,8 @@ make_layout_tibble <- function(df_valid,
                                final_vol = 500, 
                                protein_name, 
                                validate_all = TRUE,
-                               fold_dil = 2) {
+                               fold_dil = 2,
+                                high_conc_fold = 2) {
   # create the well table which is used to make the layouts
   well_table <- make_well_names("ROWS", "1") %>%
                  tibble(well = .) %>%
@@ -147,7 +148,7 @@ make_layout_tibble <- function(df_valid,
                        col = parse_number(well)) %>%
                 mutate(row_num = alpha_to_num(row)) %>%
                 mutate(block_num = set_dye_num(row_num)) %>%
-                mutate(conc_num = 1/fold_dil^(row_num - block_num)) %>%
+                mutate(conc_num = high_conc_fold/fold_dil^(row_num - block_num)) %>%
                 group_by(col, block_num)
     
   if (validate_all == TRUE) {
@@ -190,14 +191,42 @@ df_valid <- read_csv("sample_validation_hits.csv")
 ```
 
 ```{r}
-validation_layout_test <- make_layout_tibble(df_valid, protein_layout, 250, "two", fold_dil = 2) %>%
-      lapply(list("dye","conc", "volume", "protein"), df_to_layout_maker, df_layout = .) %>%
-                      bind_rows() %>%
-                      mutate_at("Type", gsub, pattern = "dye", replacement = "compound") %>%
-                      mutate_at("Type", gsub, pattern = "conc", replacement = "concentration")
+## user inputs are: 
+# protein_name (default: none?)
+# final_volume (default: 500)
+# fold_dilutions (default = 2 )
+# high_conc_fold (default = 2)
+prot_name <- "protein_name"
+final_vol <- 500
+fold_dil <- 4
+high_conc_fold = 0.5
+
+validation_layout_test <- make_layout_tibble(df_valid = df_valid, ## add hit df here
+                               layout = protein_layout, ## add mother layout here
+                               final_vol =final_vol, ## final vol GUI element
+                               protein_name = prot_name, ## final vol GUI element
+                               validate_all = TRUE, ## final vol GUI element: radio button
+                               fold_dil = fold_dil, ## final vol GUI element
+                               high_conc_fold = high_conc_fold)  %>% ## final vol GUI element
+  
+                      lapply(list("dye","conc", "volume", "protein"), 
+                              df_to_layout_maker, 
+                             df_layout = .) %>% 
+                                      bind_rows() %>%
+                                      mutate_at("Type", gsub, pattern = "dye", replacement = "compound") %>%
+                                      mutate_at("Type", gsub, pattern = "conc", replacement = "concentration")
+
+
+# validation_layout_test <- make_layout_tibble(df_valid, protein_layout, 250, "two", fold_dil = 2, high_conc_fold = 2) %>%
+#       lapply(list("dye","conc", "volume", "protein"), df_to_layout_maker, df_layout = .) %>%
+#                       bind_rows() %>%
+#                       mutate_at("Type", gsub, pattern = "dye", replacement = "compound") %>%
+#                       mutate_at("Type", gsub, pattern = "conc", replacement = "concentration")
 
 
 validation_layout_test
+
+#write_csv("test_download_layout.csv", x = validation_layout_test) # make sure this works as a layout--it does!
 ```
 
 

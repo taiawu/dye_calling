@@ -39,6 +39,9 @@ server <- function(input, output) {
             } else if (input$use_layout_protein == "layout_606") {
                 values$protein_layout <- readRDS("layout_606.rds")
                 
+            } else if (input$use_layout_protein == "layout_861") {
+              values$protein_layout <- readRDS("layout_861.rds")
+              
             } else {
                 protein_layout_path <- input$protein_layout$datapath
                 print(protein_layout_path)
@@ -65,6 +68,10 @@ server <- function(input, output) {
                 print("buffer layout 606")
                 values$buffer_layout <- readRDS("layout_606.rds")
                 
+            } else if (input$use_layout_buffer == "layout_861") {
+              print("buffer layout 606")
+              values$buffer_layout <- readRDS("layout_861.rds")
+              
             } else {
                 print("buffer layout custom")
                 buffer_layout_path <- input$buffer_layout$datapath
@@ -121,6 +128,7 @@ server <- function(input, output) {
             values$df_all <- bind_rows(values$protein_file_layout, values$buffer_file_layout) %>%
                 unite(dye_conc_type_channel, c(dye, conc, type, channel), sep = "-", remove = FALSE)
             
+            values$main_plot <- facet_wrap_linetyped2(values$df_all, title = paste0(input$exp_num, ": raw dye screen results"), facets_wide = 6 )
             # if (input$save_outputs == TRUE) {
             # 
             # filename = function() {
@@ -153,23 +161,7 @@ server <- function(input, output) {
                 paste0(input$exp_num, "_", as.character(base::Sys.Date()), "_df_all.rds")
             },
             content = function(file) {
-                # # # write the read_me
-                # fileConn <- file(paste0(input$exp_num, "_", as.character(base::Sys.Date()),"_",  "readme.txt"))
-                # writeLines(c(paste("Experiment", paste0(input$exp_num, input$protein), sep = ": "),
-                #              paste("Dye daughter plates:", input$daughter_num, sep = ": "),
-                #              paste("Buffer used for screen:", input$buffer_type, sep = ":"),
-                #              paste("Hit calling script version", input$script_version, sep = ": "),
-                #              paste("Instrument used", input$instrument, sep = ": "),
-                #              paste("Plate type", input$plate_type, sep = ": "),
-                #              paste("Plate lot", input$plate_lot, sep = ": "),
-                #              paste("Analysis completed on", as.character(base::Sys.Date()), sep = ": "),
-                #              additional_notes), fileConn)
-                # close(fileConn)
-                
-                # write the session info
-                # writeLines(capture.output(sessionInfo()), paste0(path_fin, exp_num, as.character(base::Sys.Date()),"_","sessionInfo.txt")) # save the session info into the final materials folder
-                
-                # write the RDS
+            
                 write_rds(values$df_all, file)
             }
         )
@@ -203,16 +195,17 @@ server <- function(input, output) {
             content = function(file) {
                 ### make and save the primary plot
                 values$plot_title_save <- paste0(input$exp_num, "--", as.character(base::Sys.Date()), "_full_screen_data")
-                values$p_save <- facet_wrap_linetyped2(values$df_all, 
-                                                       values$plot_title_save, 
-                                                       facets_wide = 14)
+                
+                # values$p_save <- facet_wrap_linetyped2(values$df_all, 
+                #                                        values$plot_title_save, 
+                #                                        facets_wide = 14)
                 
                 values$plot_ratio <- values$df_all %>%
                     select(dye) %>%
                     distinct() %>%
                     nrow()
                 
-                ggsave(file, values$p_save, width = 10, height =  (1/1.618 * values$plot_ratio/14 + 1) )
+                ggsave(file, values$main_plot, width = 10, height =  1.5*(1/1.618 * values$plot_ratio/6 + 1), limitsize = FALSE )
                 
             }
         )
@@ -233,27 +226,11 @@ server <- function(input, output) {
         
     }) # end observe event analyze_button
     
-    # observeEvent(values$df_all, {
-    #     req(values$df_all)
-    #     req(input$save_outputs == TRUE)
-    #     ### make and save the primary plot
-    #     values$plot_title <- paste0(input$exp_num, "--", as.character(base::Sys.Date()), "_full_screen_data")
-    #     values$plot_save_name <- paste0(input$path_in, "final/", values$plot_title, ".pdf")
-    #     
-    #     values$p_save <- facet_wrap_linetyped2(values$df_all, values$plot_title, facets_wide = 14)
-    #     values$plot_ratio <- values$df_all %>%
-    #         select(dye) %>%
-    #         distinct() %>%
-    #         nrow()
-    #     
-    #     #fin_out_path <- paste0(input$path_in, "final/", input$exp_num, "_", as.character(base::Sys.Date()))
-    #     ggsave(values$plot_save_name, values$p_save, width = 10, height =  (1/1.618 * values$plot_ratio/14 + 1) )
-    # })
-    
     
     #### create the interactive hit-calling plot 
     output$plot <- renderPlot(
-        facet_wrap_linetyped2(values$df_all, title = values$plot_title, facets_wide = 6 )
+      values$main_plot
+        #facet_wrap_linetyped2(values$df_all, title = values$plot_title, facets_wide = 6 )
         ## FOR TESTING ##facet_wrap_linetyped2(values$df_all %>% filter(dye %in% c("A009", "A010", "A011")), title = values$plot_title, facets_wide = 6 ) # testing, only deal with three wells of data
     ) 
     
@@ -334,17 +311,7 @@ server <- function(input, output) {
                           arrange(desc(assignment)), file)
         }
     )
-    
-    
-    ### making the validation plate layout
-    # wellPanel(
-    #     textInput("protein_name_valid", "Protein name", "SP0XXX"),
-    #     numericInput("final_vol", "Volume of stock in validation daughter (nL)", 500),
-    #     numericInput("fold_dil", "Fold-dilutions tested in validation", 2),
-    #     numericInput("high_conc_fold", "Fold over screening concentation to start validations", 2),
-    #     downloadButton("download_validation_layout", "Download validation plate layout")  
 
-    # )
     
     observeEvent( input$download_validation_layout, {
         
@@ -401,6 +368,7 @@ server <- function(input, output) {
     
 }
 #
+
 # Define UI for application that draws a histogram
 ui <- navbarPage(useShinyalert(),
                  tabPanel("Instructions",
@@ -454,21 +422,21 @@ ui <- navbarPage(useShinyalert(),
                  tabPanel("Enter screening information",
                           column(3,
                                  p("Basic screen information", style = "font-size: 16px;",align = "center"),
-                                 textInput("protein", "Protein", "Cedilla_buffer"),
-                                 textInput("exp_num", "Experiment number", "Ds0014"),
-                                 textInput("buffer", "Buffer used", "TEAD/BCL-6: 50mM Tris pH8.0, 150mM NaCl, 1mM TCEP"),
-                                 textAreaInput("additional_notes", "Additional notes","Making sure everything looks ok with Alya's buffer screen in the 0062000 Axygen plates before proceeding to buffer screening.", height = 255)
+                                 textInput("protein", "Protein", "SP0XX"),
+                                 textInput("exp_num", "Experiment number", "Ds00XX"),
+                                 textInput("buffer", "Buffer used", "Buffer componets here"),
+                                 textAreaInput("additional_notes", "Additional notes","Notes on the screen.", height = 255)
                           ),
                           
                           column(3,
                                  p("Technical notes", style = "font-size: 16px;",align = "center"),
                                  numericInput("start_T", "Starting temperature (C)", 25),
                                  numericInput("end_T", "Ending temperature (C)", 94),
-                                 textInput("daughter_num", "Dye daughter number", "715"),
+                                 textInput("daughter_num", "Dye daughter number", "861"),
                                  textInput("script_version", "Analysis script version", "hit_calling_v13.Rmd"),
-                                 textInput("instrument", "qPCR instrument used", "qTower384g"),
+                                 textInput("instrument", "qPCR instrument used", "qTower384g quentin Towerntino"),
                                  textInput("plate_type", "Type of PCR plate used", "Axygen PCR-284-LC480WNFBC"),
-                                 textInput("plate_lot", "PCR plate lot number", "lot 00620000")
+                                 textInput("plate_lot", "PCR plate lot number", "lot 23517000")
                                  # ,
                                  # checkboxInput("save_outputs", "Save outputs", value = TRUE, width = NULL)
                           ),
@@ -495,7 +463,8 @@ ui <- navbarPage(useShinyalert(),
                                  radioButtons("use_layout_protein", "Use daughter layout for protein plate:",
                                               c("Custom layout" = "custom", #selected by default
                                                 "Daughter 715" = "layout_715",
-                                                "Daughter 821" = "layout_821")),
+                                                "Daughter 821" = "layout_821",
+                                                "Daughter 861" = "layout_861")),
                                  
                                  tags$hr(),
                                  p("Select buffer screening data"),
@@ -522,7 +491,8 @@ ui <- navbarPage(useShinyalert(),
                                  radioButtons("use_layout_buffer", "Use daughter layout for buffer plate:",
                                               c("Custom layout" = "custom", #selected by default
                                                 "Daughter 715" = "layout_715",
-                                                "Daughter 821" = "layout_821"
+                                                "Daughter 821" = "layout_821",
+                                                "Daughter 861" = "layout_861"
                                               )),
                                  
                                  actionButton("analyze_button", "Analyze")
@@ -532,6 +502,7 @@ ui <- navbarPage(useShinyalert(),
                               # left panel: interactive sliders
                               column(9,
                                      wellPanel(id = "facet_plot",
+                                               p("Plot is ready when this grey box appears white."),
                                                #plotOutput("plot1", brush = "plot_brush", height = "5000px"),
                                                plotOutput("plot",
                                                           click = "plot_click",
@@ -542,9 +513,10 @@ ui <- navbarPage(useShinyalert(),
                                                style = "overflow-y:scroll; max-height: 600px")
                               ),
                               column(3,
-                                     downloadButton("download_files", "Download processed data (save in 'intermediate' folder)"), 
-                                     downloadButton("download_summary_files", "Download read-me (save in 'final' folder)"), 
-                                     downloadButton("download_plot", "Download plot (takes a minute or so, save in 'final' folder)"),
+                                     p("Download all of these:"),
+                                     downloadButton("download_files", "Download processed data"), 
+                                     downloadButton("download_summary_files", "Download read-me"), 
+                                     downloadButton("download_plot", "Download plot (takes a minute or so)"),
                                      downloadButton("save_dt_button", "Save hit list to final folder"), 
                                      DT::dataTableOutput("data_table")))
                  ),
@@ -574,10 +546,10 @@ ui <- navbarPage(useShinyalert(),
                                      # 
                                      wellPanel(
                                          textInput("protein_name_valid", "Protein name", "SP0XXX"),
-                                         numericInput("final_vol", "Volume of stock in validation daughter (nL)", 500),
+                                         numericInput("final_vol", "Volume of stock in validation daughter (nL)", 250),
                                          numericInput("fold_dil", "Fold-dilutions tested in validation", 2),
                                          checkboxInput("validate_all", "Validate all (including 'maybes')?", value = TRUE, width = NULL),
-                                         numericInput("high_conc_fold", "Fold over screening concentation to start validations", 2),
+                                         numericInput("high_conc_fold", "Fold over screening concentation to start validations", 1),
                                          downloadButton("download_validation_layout", "Download validation plate layout")  
                                      )
                                     

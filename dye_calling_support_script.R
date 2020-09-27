@@ -1,5 +1,5 @@
 facet_no_y_theme <- theme( # for the first hit-calling plot, the most austere
-  text = element_text(size = 4),
+  text = element_text(size = 8),
   axis.title = element_blank(), # don't label the axes
   axis.text.x = element_text(), # don't label the numbers on the axes
   axis.ticks = element_blank(), # dont have ticks
@@ -96,7 +96,8 @@ read_qTower <- function( file_path ) {
   
   
   df <- df_raw %>%
-    drop_na( tail(names(.), 1) %>% var() ) %>% # drop the header, which is empty in the tailing cols
+    drop_na( tail(names(.), 1))  %>% # drop the header, which is empty in the tailing cols
+    ## drop_na( tail(names(.), 1) %>% var() ) %>%  # this line worked in an earlier version of dplyr i think?
     mutate( channel = make_channel_vec(.)) %>% # add channel as a column
     filter(!`0` %in% .$channel) %>%
     rename(well = `0`) %>%
